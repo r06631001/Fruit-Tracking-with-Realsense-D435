@@ -202,32 +202,6 @@
      </layout>
     </widget>
    </widget>
-   <widget class="QPushButton" name="track_line">
-    <property name="geometry">
-     <rect>
-      <x>700</x>
-      <y>30</y>
-      <width>151</width>
-      <height>20</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Draw Tracking Line</string>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="tracking">
-    <property name="geometry">
-     <rect>
-      <x>700</x>
-      <y>60</y>
-      <width>151</width>
-      <height>20</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Tracking</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="fast_track">
     <property name="geometry">
      <rect>

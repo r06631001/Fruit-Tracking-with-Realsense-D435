@@ -27,7 +27,6 @@ void featureDetection(cv::Mat img, std::vector<cv::Point2f>& point1, int count){
     cv::Ptr<cv::xfeatures2d::SURF> detector = cv::xfeatures2d::SURF::create(700);
     std::vector<cv::KeyPoint> keypoint1;
     detector->detect(img, keypoint1);
-    //    qDebug() << "sdfg" << keypoint1.size();
 
     //    std::vector<cv::KeyPoint> keypoint1;
     //    int fast_threshold = 20;
@@ -37,9 +36,9 @@ void featureDetection(cv::Mat img, std::vector<cv::Point2f>& point1, int count){
     cv::drawKeypoints(img, keypoint1, img_keypoints_1, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
 
     cv::KeyPoint::convert(keypoint1, point1, std::vector<int>());
-    cv::imshow("Keypoints 1", img_keypoints_1 );
-    QString filename = "./pose_result/frame_" + QString::number(count) + ".png";
-    cv::imwrite(filename.toStdString(), img_keypoints_1);
+    //    cv::imshow("Keypoints 1", img_keypoints_1 );
+    //    QString filename = "./pose_result/frame_" + QString::number(count) + ".png";
+    //    cv::imwrite(filename.toStdString(), img_keypoints_1);
 }
 
 void featureDetection_GPU(cv::Mat img, std::vector<cv::Point2f>& point1, int count){
@@ -47,12 +46,6 @@ void featureDetection_GPU(cv::Mat img, std::vector<cv::Point2f>& point1, int cou
     cv::Ptr<cv::xfeatures2d::SURF> detector = cv::xfeatures2d::SURF::create(100);
     std::vector<cv::KeyPoint> keypoint1;
     detector->detect(img, keypoint1);
-    //    qDebug() << "sdfg" << keypoint1.size();
-
-    //    std::vector<cv::KeyPoint> keypoint1;
-    //    int fast_threshold = 20;
-    //    bool nonmaxSuppression = true;
-    //    cv::FAST(img, keypoint1, fast_threshold, nonmaxSuppression);
     cv::Mat img_keypoints_1;
     cv::drawKeypoints(img, keypoint1, img_keypoints_1, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
 
@@ -79,7 +72,6 @@ void featureTracking(cv::Mat img1, cv::Mat img2, std::vector<cv::Point2f>& point
             indexCorrection++;
         }
     }
-
 }
 
 cv::Point2f get_tracked_point(cv::Mat homography_matrix, cv::Point2f input_point){
@@ -93,17 +85,17 @@ cv::Point2f get_tracked_point(cv::Mat homography_matrix, cv::Point2f input_point
     double M32 = homography_matrix.at<double>(2, 1);
     double M33 = homography_matrix.at<double>(2, 2);
 
-//    qDebug() << input_point.x << input_point.y;
-//    qDebug() << M11 << M12 << M13;
-//    qDebug() << M21 << M22 << M23;
-//    qDebug() << M31 << M32 << M33;
+    //    qDebug() << input_point.x << input_point.y;
+    //    qDebug() << M11 << M12 << M13;
+    //    qDebug() << M21 << M22 << M23;
+    //    qDebug() << M31 << M32 << M33;
 
     float x = (float)input_point.x;
     float y = (float)input_point.y;
-//    qDebug() << "OK" << (M31 * (double)x + M32 * (double)y + M33) << (M31 * (double)x + M32 * (double)y + M33);
     cv::Point2f temp_point(((M11 * (float)x + M12 * (float)y + M13) / (M31 * (float)x + M32 * (float)y + M33))
-                         , ((M21 * (float)x + M22 * (float)y + M23) / (M31 * (float)x + M32 * (float)y + M33)));
-//    qDebug() << temp_point.x << temp_point.y;
+                           , ((M21 * (float)x + M22 * (float)y + M23) / (M31 * (float)x + M32 * (float)y + M33)));
+    //    qDebug() << temp_point.x << temp_point.y;
+
     return temp_point;
 }
 
@@ -122,10 +114,8 @@ cv::Point2f global_coordinate(cv::Mat homography_matrix, cv::Point2f input_point
     float x = (float)input_point.x;
     float y = (float)input_point.y;
 
-
-//    qDebug() << "OK" << (M31 * (double)x + M32 * (double)y + M33) << (M31 * (double)x + M32 * (double)y + M33);
     cv::Point2f temp_point(((M11 * (float)x + M12 * (float)y + M13) / (M31 * (float)x + M32 * (float)y + M33))
-                         , ((M21 * (float)x + M22 * (float)y + M23) / (M31 * (float)x + M32 * (float)y + M33)));
+                           , ((M21 * (float)x + M22 * (float)y + M23) / (M31 * (float)x + M32 * (float)y + M33)));
     return temp_point;
 }
 
@@ -156,154 +146,58 @@ void set_ID(std::vector<bbox_t_history>& total_fruit, QList<cv::Point> prev_trac
     }
 }
 
-void set_ID_new(std::vector<bbox_t_history>& total_fruit, QList<cv::Point2f> prev_tracked_fruit, QList<cv::Point2f> curr_fruit, std::vector<bbox_t_history>& prev_vec, std::vector<bbox_t_history>& curr_vec, QList<cv::Mat> Homo_history, int threshold, bool prev_fruit, int curr_frame, int lost_track_threshold, cv::Mat& check_mat){
-    for(int i = 0 ; i < curr_fruit.size() ; i++){
+void set_ID_fast(std::vector<bbox_t_history>& total_fruit, std::vector<bbox_t_history>& prev_vec, std::vector<bbox_t_history>& curr_vec, QList<cv::Mat> Homo_history, bool prev_fruit, int threshold, int lost_track_threshold, cv::Mat& check_mat, cv::Mat maturity_mat){
+    cv::Mat save_frame = maturity_mat.clone();
+    int curr_frame = Homo_history.size();
+
+    QList<cv::Point2f> prev_tracked_fruit;
+    for(int i = 0 ; i < prev_vec.size() ; i++){
+        cv::Point2f temp((float)prev_vec.at(i).x + (float)prev_vec.at(i).w / 2, (float)prev_vec.at(i).y + (float)prev_vec.at(i).h / 2);
+        prev_tracked_fruit.append(get_tracked_point(Homo_history.at(curr_frame - 1), temp));
+    }
+
+    QList<int> used_ids;
+    int used_id = -1;
+    for(int i = 0 ; i < curr_vec.size() ; i++){
         cv::Point2f trajectory((float)curr_vec.at(i).x + (float)curr_vec.at(i).w / 2, (float)curr_vec.at(i).y + (float)curr_vec.at(i).h / 2);
+        cv::Point2d w_h(curr_vec.at(i).w, curr_vec.at(i).h);
+        cv::Point2f curr_fruit((float)curr_vec[i].x + (float)curr_vec[i].w / 2, (float)curr_vec[i].y + (float)curr_vec[i].h / 2);
+
         if(prev_fruit){
-            double distance = cv::norm(prev_tracked_fruit.at(0) - curr_fruit.at(i));    // Distance between predict point and true point
-            if(distance < threshold){
-                curr_vec.at(i).track_id = prev_vec.at(0).track_id;
-            }
-            for(int j = 1 ; j < prev_tracked_fruit.size() ; j++){
-                double temp = cv::norm(prev_tracked_fruit.at(j) - curr_fruit.at(i));
-                if(temp < distance) {
-                    distance = temp;
-                    if(temp < threshold) curr_vec.at(i).track_id = prev_vec.at(j).track_id;
-                    else curr_vec.at(i).track_id = 0;
-                }
-            }
-            if(curr_vec.at(i).track_id != 0){   // New Fruit compare to last frame
-                for(int ii = 0 ; ii < total_fruit.size() ; ii++){
-                    if(total_fruit.at(ii).track_id == curr_vec.at(i).track_id){
-                        total_fruit.at(ii).trajectory.append(trajectory);
-                        total_fruit.at(ii).history.append(2);
+            double distance = 1000;    // Distance between predict point and true point
+            for(int j = 0 ; j < prev_tracked_fruit.size() ; j++){
+                bool duplicate = false;
+                for(int n = 0 ; n < used_ids.size() ; n++){
+                    if(prev_vec.at(j).track_id == used_ids.at(n)){
+//                        qDebug() << "ID" << prev_vec.at(j).track_id << "used";
+                        duplicate = true;
                         break;
                     }
                 }
-            }
-        }
-        else{
-            curr_vec.at(i).track_id = total_fruit.size() + 1;
-            for(int pp = 0 ; pp < curr_frame - 1 ; pp++){
-                curr_vec.at(i).history.append(0);    // Inactive
-            }
-            curr_vec.at(i).history.append(2);   // First Tracked
-            curr_vec.at(i).trajectory.append(trajectory);
-            total_fruit.push_back(curr_vec.at(i));
-            qDebug() << "2. New Fruit (No Fruit in last frame)";
-        }
-    }
-
-    // Append history with lost and mark the lost frame
-    for(int i = 0 ; i < total_fruit.size() ; i++){
-        if(total_fruit.at(i).history.at(total_fruit.at(i).history.size() - 1) != 0){ // Not inactive
-            if(total_fruit.at(i).history.size() < curr_frame){
-                total_fruit.at(i).history.append(1);    // Lost
-                if(total_fruit.at(i).history.at(total_fruit.at(i).history.size() - 2) == 2){   // From tracked -> lost
-                    total_fruit.at(i).lost_frame = curr_frame;
+                if(duplicate){
+                    continue;
                 }
-            }
-        }
-    }
-
-    for(int i = 0 ; i < curr_vec.size() ; i++){
-        if(curr_vec.at(i).track_id == 0){   // 1. Lost -> Tracked  2. New fruit
-            QList<double> dis;
-            QList<int> lost_index;
-            cv::Point2f curr_point((float)curr_vec.at(i).x + (float)curr_vec.at(i).w / 2, (float)curr_vec.at(i).y + (float)curr_vec.at(i).h / 2);
-            qDebug() << "Frame" << curr_frame << "check : 1. Lost -> Tracked  2. New fruit";
-            for(int j = 0 ; j < total_fruit.size() ; j++){
-                if(total_fruit.at(j).history.at(total_fruit.at(j).history.size() - 1) == 1){    // Lost
-                    cv::Point2f lost_point = total_fruit.at(j).trajectory.at(total_fruit.at(j).trajectory.size() - 1);
-                    qDebug() << "Search for Lost fruitm, Lost ID: " << total_fruit.at(j).track_id
-                             << ", lost frame: " << total_fruit.at(j).lost_frame
-                             << ", lost point: " << lost_point.x << ", " << lost_point.y
-                             << ", homo_size" << Homo_history.size() << " ===";
-                    for(int h = total_fruit.at(j).lost_frame - 2 ; h <= curr_frame - 2 ; h++){
-                        cv::Point2f output = get_tracked_point(Homo_history.at(h), lost_point);
-                        lost_point.x = output.x;
-                        lost_point.y = output.y;
-                        cv::circle(check_mat, lost_point, 3, cv::Scalar((j*10)%255, (j*10)%255, (j*10)%255), -1);
-//                        qDebug() << "x: " << output.x << ", y: " << output.y;
-//                        qDebug() << Homo_history.at(h).at<double>(0, 0) << Homo_history.at(h).at<double>(0, 1) << Homo_history.at(h).at<double>(0, 2);
-//                        qDebug() << Homo_history.at(h).at<double>(1, 0) << Homo_history.at(h).at<double>(1, 1) << Homo_history.at(h).at<double>(1, 2);
-//                        qDebug() << Homo_history.at(h).at<double>(2, 0) << Homo_history.at(h).at<double>(2, 1) << Homo_history.at(h).at<double>(2, 2);
-                    }
-                    double temp = cv::norm(lost_point - curr_point);
-                    dis.append(temp);
-                    lost_index.append(j);  // j means lost fruit in total_fruit with "INDEX" not "ID"
-                }
-            }
-            if(dis.size() != 0){    // There are Lost fruit in total fruit
-                double min = dis.at(0);
-                int index = lost_index.at(0);
-                for(int k = 1 ; k < dis.size() ; k++){
-                    if(dis.at(k) < min){
-                        min = dis.at(k);
-                        index = lost_index.at(k);
-                    }
-                }
-                qDebug() << min;
-                if(min < lost_track_threshold){   // 1. Lost -> Tracked
-                    curr_vec.at(i).track_id = total_fruit.at(index).track_id;
-                    total_fruit.at(index).history.pop_back();
-                    total_fruit.at(index).history.append(2);
-                    total_fruit.at(index).trajectory.append(curr_point);
-                    qDebug() << "1. Lost -> Tracked" << " ID:" << total_fruit.at(index).track_id;
-                }
-                else{   // 2. New Fruit
-                    curr_vec.at(i).track_id = total_fruit.size() + 1;
-                    for(int pp = 0 ; pp < curr_frame - 1 ; pp++){
-                        curr_vec.at(i).history.append(0);    // Inactive
-                    }
-                    curr_vec.at(i).history.append(2);   // First Tracked
-                    curr_vec.at(i).trajectory.append(curr_point);
-                    total_fruit.push_back(curr_vec.at(i));
-                    qDebug() << "2. New Fruit";
-                }
-            }
-            else{   // There is no Lost fruit in total fruit --> New Fruit
-                curr_vec.at(i).track_id = total_fruit.size() + 1;
-                for(int pp = 0 ; pp < curr_frame - 1 ; pp++){
-                    curr_vec.at(i).history.append(0);    // Inactive
-                }
-                curr_vec.at(i).history.append(2);   // First Tracked
-                curr_vec.at(i).trajectory.append(curr_point);
-                total_fruit.push_back(curr_vec.at(i));
-                qDebug() << "2. New Fruit (No Fruit Lost in total fruit)";
-            }
-        }
-    }
-}
-
-void set_ID_fast(std::vector<bbox_t_history>& total_fruit, QList<cv::Point2f> prev_tracked_fruit, QList<cv::Point2f> curr_fruit, std::vector<bbox_t_history>& prev_vec, std::vector<bbox_t_history>& curr_vec, QList<cv::Mat> Homo_history, int threshold, bool prev_fruit, int curr_frame, int lost_track_threshold, cv::Mat& check_mat, cv::Mat maturity_mat){
-    cv::Mat save_frame = maturity_mat.clone();
-    for(int i = 0 ; i < curr_fruit.size() ; i++){
-        cv::Point2f trajectory((float)curr_vec.at(i).x + (float)curr_vec.at(i).w / 2, (float)curr_vec.at(i).y + (float)curr_vec.at(i).h / 2);
-        cv::Point2d w_h(curr_vec.at(i).w, curr_vec.at(i).h);
-        if(prev_fruit){
-            double distance = cv::norm(prev_tracked_fruit.at(0) - curr_fruit.at(i));    // Distance between predict point and true point
-            if(distance < threshold){
-                curr_vec.at(i).track_id = prev_vec.at(0).track_id;
-            }
-            for(int j = 1 ; j < prev_tracked_fruit.size() ; j++){
-                double temp = cv::norm(prev_tracked_fruit.at(j) - curr_fruit.at(i));
+                double temp = cv::norm(prev_tracked_fruit.at(j) - curr_fruit);
                 if(temp < distance) {
                     distance = temp;
-                    if(temp < threshold){ curr_vec.at(i).track_id = prev_vec.at(j).track_id;    qDebug() << "first stage - tracked  ID:" << prev_vec.at(j).track_id;}
+                    if(temp < threshold){
+                        curr_vec.at(i).track_id = prev_vec.at(j).track_id;
+                        used_id = prev_vec.at(j).track_id;
+                        qDebug() << "first stage - tracked  ID:" << prev_vec.at(j).track_id;
+                    }
                     else {curr_vec.at(i).track_id = 0;  qDebug() << "first stage - Lost2Track or New";}
                 }
             }
-            if(curr_vec.at(i).track_id != 0){   // New Fruit compare to last frame
-                for(int ii = 0 ; ii < total_fruit.size() ; ii++){
-                    if(total_fruit.at(ii).track_id == curr_vec.at(i).track_id){
-                        total_fruit.at(ii).trajectory.append(trajectory);
-                        total_fruit.at(ii).history.append(2);
-                        total_fruit.at(ii).frame_mat.append(save_frame);
-                        total_fruit.at(ii).width_height.append(w_h);
-                        break;
-                    }
-                }
+//            qDebug() << used_id;
+            if(used_id != -1)    used_ids.append(used_id);
+            if(curr_vec.at(i).track_id != 0){   // Old Fruit compare to last frame
+                auto it = std::find_if(total_fruit.begin(), total_fruit.end(), [&](bbox_t_history &vector)
+                { return vector.track_id == curr_vec.at(i).track_id; });
+
+                it->trajectory.append(trajectory);
+                it->history.append(2);
+                it->frame_mat.append(save_frame);
+                it->width_height.append(w_h);
             }
         }
         else{
@@ -343,7 +237,7 @@ void set_ID_fast(std::vector<bbox_t_history>& total_fruit, QList<cv::Point2f> pr
                 if(total_fruit.at(j).history.at(total_fruit.at(j).history.size() - 1) == 1){    // Lost
                     cv::Point2f lost_point = total_fruit.at(j).trajectory.at(total_fruit.at(j).trajectory.size() - 1);
                     cv::putText(check_mat, "ID : " + std::to_string(total_fruit.at(j).track_id), cv::Point2f(lost_point.x - 30, lost_point.y + 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar((j*10)%255, (j*50)%255, (j*100)%255), 1.5);
-                    qDebug() << "Search for Lost fruitm, Lost ID: " << total_fruit.at(j).track_id
+                    qDebug() << "Search for Lost fruit, Lost ID: " << total_fruit.at(j).track_id
                              << ", lost frame: " << total_fruit.at(j).lost_frame
                              << ", lost point: " << lost_point.x << ", " << lost_point.y
                              << ", homo_size" << Homo_history.size() << " ===";

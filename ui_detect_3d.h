@@ -60,8 +60,6 @@ public:
     QLabel *label;
     QDoubleSpinBox *y_bias;
     QPushButton *distance;
-    QPushButton *track_line;
-    QPushButton *tracking;
     QPushButton *fast_track;
     QMenuBar *menuBar;
     QMenu *menuExit;
@@ -185,12 +183,6 @@ public:
 
         gridLayout_2->addWidget(distance, 2, 0, 1, 3);
 
-        track_line = new QPushButton(centralWidget);
-        track_line->setObjectName(QStringLiteral("track_line"));
-        track_line->setGeometry(QRect(700, 30, 151, 20));
-        tracking = new QPushButton(centralWidget);
-        tracking->setObjectName(QStringLiteral("tracking"));
-        tracking->setGeometry(QRect(700, 60, 151, 20));
         fast_track = new QPushButton(centralWidget);
         fast_track->setObjectName(QStringLiteral("fast_track"));
         fast_track->setGeometry(QRect(700, 90, 151, 20));
@@ -233,8 +225,6 @@ public:
         save->setText(QApplication::translate("detect_3d", "Save", nullptr));
         label->setText(QApplication::translate("detect_3d", "Distance Save Path:", nullptr));
         distance->setText(QApplication::translate("detect_3d", "Get Distance", nullptr));
-        track_line->setText(QApplication::translate("detect_3d", "Draw Tracking Line", nullptr));
-        tracking->setText(QApplication::translate("detect_3d", "Tracking", nullptr));
         fast_track->setText(QApplication::translate("detect_3d", "Faster Tracking", nullptr));
         menuExit->setTitle(QApplication::translate("detect_3d", "Exit", nullptr));
     } // retranslateUi

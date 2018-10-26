@@ -25,6 +25,7 @@
 #include <QDebug>
 #include <QFile>
 #include <QFileDialog>
+#include <QElapsedTimer>
 
 struct bbox_t_history:bbox_t
 {
@@ -75,10 +76,6 @@ private slots:
     void on_frame_valueChanged(int arg1);
 
     void on_epipolar_clicked();
-
-    void on_track_line_clicked();
-
-    void on_tracking_clicked();
 
     void on_fast_track_clicked();
 
