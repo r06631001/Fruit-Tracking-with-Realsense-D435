@@ -61,6 +61,7 @@ public:
     QDoubleSpinBox *y_bias;
     QPushButton *distance;
     QPushButton *fast_track;
+    QCheckBox *save_iou;
     QMenuBar *menuBar;
     QMenu *menuExit;
     QToolBar *mainToolBar;
@@ -186,6 +187,9 @@ public:
         fast_track = new QPushButton(centralWidget);
         fast_track->setObjectName(QStringLiteral("fast_track"));
         fast_track->setGeometry(QRect(700, 90, 151, 20));
+        save_iou = new QCheckBox(centralWidget);
+        save_iou->setObjectName(QStringLiteral("save_iou"));
+        save_iou->setGeometry(QRect(700, 68, 141, 20));
         detect_3d->setCentralWidget(centralWidget);
         menuBar = new QMenuBar(detect_3d);
         menuBar->setObjectName(QStringLiteral("menuBar"));
@@ -226,6 +230,7 @@ public:
         label->setText(QApplication::translate("detect_3d", "Distance Save Path:", nullptr));
         distance->setText(QApplication::translate("detect_3d", "Get Distance", nullptr));
         fast_track->setText(QApplication::translate("detect_3d", "Faster Tracking", nullptr));
+        save_iou->setText(QApplication::translate("detect_3d", "Save IOU Info.", nullptr));
         menuExit->setTitle(QApplication::translate("detect_3d", "Exit", nullptr));
     } // retranslateUi
 

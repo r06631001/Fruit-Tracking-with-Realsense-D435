@@ -20,13 +20,13 @@ detect_3d::detect_3d(QWidget *parent) :
     ui->setupUi(this);
     save_dis = false;
     save_pose = false;
+    saveIOU = false;
     dis_path = "./distance_result/distance.csv";
     pose_path = "./pose_result/pose.csv";
     ui->save_path->setText(dis_path);
     ui->pose_save->setText(pose_path);
     frame = ui->frame->value();
     scale = ui->scale->value();
-
 }
 
 detect_3d::~detect_3d()
@@ -106,6 +106,12 @@ void detect_3d::on_save_stateChanged(int arg1)
 {
     if(arg1 == Qt::Checked) save_dis = true;
     else    save_dis = false;
+}
+
+void detect_3d::on_save_iou_stateChanged(int arg1)
+{
+    if(arg1 == Qt::Checked) saveIOU = true;
+    else    saveIOU = false;
 }
 
 void detect_3d::on_actionexit_triggered()
@@ -560,13 +566,22 @@ void detect_3d::on_fast_track_clicked()
     std::string cfg_file = "D://Fruit_harvest//Train_data//one_vs_one_model//berry_JingYong//strawberry_JingYong.cfg";
     std::string weights_file = "D://Fruit_harvest//Train_data//one_vs_one_model//berry_JingYong//model//strawberry_JingYong_1000.weights";
     std::string names_file = "D://Fruit_harvest//Train_data//one_vs_one_model//berry_JingYong//strawberry_JingYong.names";
+
+//    std::string cfg_file = "D://Fruit_harvest//Train_data//one_vs_one_model//tomato_JingYong//tomato_JingYong.cfg";
+//    std::string weights_file = "D://Fruit_harvest//Train_data//one_vs_one_model//tomato_JingYong//model//tomato_JingYong_4000.weights";
+//    std::string names_file = "D://Fruit_harvest//Train_data//one_vs_one_model//tomato_JingYong//tomato_JingYong.names";
+
     Detector detector(cfg_file, weights_file);
     auto obj_names = objects_names_from_file(names_file);
 
     //    QString video_file = QFileDialog::getOpenFileName(this, tr("Open Tracking Video"));
-    QString video_file = "D://Fruit_harvest//Raw_data//20171226_JingYong//video//PC260055.MOV";
-    cv::VideoWriter video_writer;
-    video_writer.open("./tracking_video/tracking_PC260055.avi", CV_FOURCC('M', 'J', 'P', 'G'), 30, cv::Size(1280, 720));
+    // STRAWBERRY VIDEO
+    QString video_name = "PC260038";
+    QString video_file = "D://Fruit_harvest//Raw_data//20171226_JingYong//video//" + video_name + ".MOV";
+    // TOMATO VIDEO
+//    QString video_name = "PC260128";
+//    QString video_file = "D://Fruit_harvest//Raw_data//20171226_JingYong//video//" + video_name + ".MOV";
+
     cv::VideoCapture video(video_file.toStdString());
 
     // Read Video First Frame
@@ -575,7 +590,6 @@ void detect_3d::on_fast_track_clicked()
     while(i < 2){
         video >> input;
         draw_mat = input.clone();
-        //        cv::imshow("src0", input);
         if(i == 0){  frame0 = input.clone();    }
         if(i == 1){  frame1 = input.clone();    break;}
         i++;
@@ -618,8 +632,10 @@ void detect_3d::on_fast_track_clicked()
         tranform0.at(i).track_id = i + 1;
         total_fruit.push_back(tranform0.at(i));
         cv::Point2f trajectory((float)tranform0[i].x + (float)tranform0[i].w / 2, (float)tranform0[i].y + (float)tranform0[i].h / 2);
+        cv::Point2f wh((float)tranform0[i].w, (float)tranform0[i].h);
         total_fruit.at(i).trajectory.append(trajectory);
         total_fruit.at(i).history.append(2);
+        total_fruit.at(i).width_height.append(wh);
         cv::putText(draw_mat, "ID:" + std::to_string(tranform0.at(i).track_id), cv::Point2f(tranform0.at(i).x - 30, tranform0.at(i).y + 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(0, 0, 255), 1.5);
     }
 
@@ -650,9 +666,9 @@ void detect_3d::on_fast_track_clicked()
     bool previous_fruit = true;
     if(tranform0.size() == 0)    previous_fruit = false;
     cv::Mat check_mat = input.clone();
-    set_ID_fast(total_fruit, tranform0, tranform1, Homo_history, previous_fruit, threshold, lost_track_threshold, check_mat, check_mat);
+    set_ID_fast(total_fruit, tranform0, tranform1, Homo_history, previous_fruit, threshold, lost_track_threshold, check_mat, check_mat, false);
 
-    cv::imwrite("./tracking_frame/1.jpg", draw_mat);
+    cv::imwrite("./tracking_frame/1_" + video_name.toStdString() + ".jpg", draw_mat);
 
     // Define previous and current
     cv::Mat prev_mat, curr_mat;
@@ -663,7 +679,6 @@ void detect_3d::on_fast_track_clicked()
     prev_point = point1;
     prev_vec = tranform1;
 
-    //    qDebug() << total_fruit.size();
 
     // Tracking start with second frame in the video
     cv::VideoCapture video1(video_file.toStdString());
@@ -676,16 +691,14 @@ void detect_3d::on_fast_track_clicked()
         cv::Mat draw_mat = input.clone();
         cv::Mat maturity_mat = input.clone();
         if(input.empty())   break;
-        if(frame > 1){
+        if((frame > 1) && (frame%5 == 0)){
             // Define current mat, point, vec
             curr_mat = input.clone();
             std::vector<bbox_t> temp = detector.detect(input, detect_threshold);
             curr_vec = bbox_t2bbox_t_history(temp);
             temp.clear();
-            //            featureDetection(curr_mat, curr_point, frame);
             std::vector<uchar> status;
             featureTracking(prev_mat, curr_mat, prev_point, curr_point, status);
-            //            qDebug() << "done feature";
 
             if(prev_point.size() < 2000){
                 featureDetection(prev_mat, prev_point, frame);
@@ -697,6 +710,9 @@ void detect_3d::on_fast_track_clicked()
             for(int i = 0 ; i < curr_vec.size() ; i++){
                 cv::Point2f temp((float)curr_vec[i].x + (float)curr_vec[i].w / 2, (float)curr_vec[i].y + (float)curr_vec[i].h / 2);
                 cv::circle(draw_mat, temp, 5, fruit_point_color, -1);
+                cv::rectangle(draw_mat, cv::Point2f((float)curr_vec[i].x, (float)curr_vec[i].y)
+                              , cv::Point2f((float)curr_vec[i].x + (float)curr_vec[i].w, (float)curr_vec[i].y + (float)curr_vec[i].h)
+                              , fruit_point_color, 1);
             }
             for(int i = 0 ; i < prev_vec.size() ; i++){
                 cv::Point2f temp((float)prev_vec[i].x + (float)prev_vec[i].w / 2, (float)prev_vec[i].y + (float)prev_vec[i].h / 2);
@@ -723,14 +739,17 @@ void detect_3d::on_fast_track_clicked()
                 cv::Point2f temp_point = get_tracked_point(homo_matrix, prev_fruit.at(i));
                 cv::circle(draw_mat, temp_point, 5, tracked_point_color, -1);
                 cv::circle(draw_mat, temp_point, threshold, tracked_point_color, 1);
+                cv::rectangle(draw_mat, cv::Point2f((float)prev_vec[i].x, (float)prev_vec[i].y)
+                              , cv::Point2f((float)prev_vec[i].x + (float)prev_vec[i].w, (float)prev_vec[i].y + (float)prev_vec[i].h)
+                              , tracked_point_color, 1);
             }
 
             // Set id with tracking result
             bool previous_fruit = true;
             if(prev_vec.size() == 0)    previous_fruit = false;
-            set_ID_fast(total_fruit, prev_vec, curr_vec, Homo_history, previous_fruit, threshold, lost_track_threshold, draw_mat, maturity_mat);
+            set_ID_fast(total_fruit, prev_vec, curr_vec, Homo_history, previous_fruit, threshold, lost_track_threshold, draw_mat, maturity_mat, saveIOU);
 
-            QFile history("./tracking_frame/history.csv");
+            QFile history("./tracking_frame/history_" + video_name + ".csv");
             QTextStream out(&history);
             if(history.open(QFile::WriteOnly|QIODevice::Append|QIODevice::Text)){
                 out << "Frame : " << frame << "\n";
@@ -749,8 +768,7 @@ void detect_3d::on_fast_track_clicked()
                 cv::putText(draw_mat, "ID:" + std::to_string(curr_vec.at(i).track_id), cv::Point2f((float)curr_vec[i].x + (float)curr_vec[i].w / 2 - 30, (float)curr_vec[i].y + (float)curr_vec[i].h / 2 + 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(0, 0, 255), 1.5);
             }
             cv::putText(draw_mat, "Total Fruit : " + std::to_string(total_fruit.size()), cv::Point2f(0, draw_mat.rows - 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(0, 0, 255), 1.5);
-            cv::imwrite("./tracking_frame/" + std::to_string(frame) + ".jpg", draw_mat);
-            //            cv::imwrite("./tracking_frame/check_frame/" + std::to_string(frame) + ".jpg", check_mat);
+            cv::imwrite("./tracking_frame/" + std::to_string(frame) + "_" + video_name.toStdString() + ".jpg", draw_mat);
 
             prev_mat = curr_mat.clone();
             prev_point = curr_point;
@@ -760,258 +778,65 @@ void detect_3d::on_fast_track_clicked()
             curr_vec.clear();
 
             cv::imshow("Tracking", draw_mat);
-            //            cv::imshow("Checking", check_mat);
-            video_writer.write(draw_mat);
             qDebug() << "The slow operation took" << timer.elapsed() << "milliseconds";
         }
         frame++;
         cv::waitKey(10);
     }
 
-    QFile track_result("./tracking_frame/tracking_result.csv");
-    QTextStream out2(&track_result);
-    if(track_result.open(QFile::WriteOnly|QIODevice::Append|QIODevice::Text)){
-        out2 << "Online-tracking\n";
-        out2 << "total_fruit.size() = " << total_fruit.size();
-        out2 << "\n\nOffline-tracking\nErase-ID\n";
-    }
-    track_result.close();
-    qDebug() << "total_fruit.size(): " << total_fruit.size();
+    int online_result = total_fruit.size();
+    qDebug() << "After online" << online_result;
 
     // Eliminate false alarm
-    int false_alarm_threshold = 2;  // if < 5 frame == Tracked --> false alarm
-    for(int i = 0 ; i < total_fruit.size() ; i++){
-        int count = 0;
-        for(int j = total_fruit.at(i).history.size() - 1 ; j >= 0 ; j--){
-            if(total_fruit.at(i).history.at(j) == 2){
-                count++;
-            }
-            if(count > false_alarm_threshold)   break;
-        }
-        if(count <= false_alarm_threshold){
-            QFile track_result("./tracking_frame/tracking_result.csv");
-            QTextStream out2(&track_result);
-            if(track_result.open(QFile::WriteOnly|QIODevice::Append|QIODevice::Text)){
-                out2 << total_fruit.at(i).track_id << ", ";
-            }
-            track_result.close();
-            qDebug() << "Erase ID: " << total_fruit.at(i).track_id;
-            total_fruit.erase(std::remove_if(total_fruit.begin(), total_fruit.end(), [&](bbox_t_history &vector){
-                                  return (vector.track_id == total_fruit.at(i).track_id);
-                              }), total_fruit.end());
-            i--;
-        }
-    }
-    if(track_result.open(QFile::WriteOnly|QIODevice::Append|QIODevice::Text)){
-        out2 << "\ntotal_fruit.size() = " << total_fruit.size();
-    }
-    track_result.close();
-    qDebug() << "total_fruit.size(): " << total_fruit.size();
+    int false_alarm_threshold = 2;
+    QList<int> erase_ID = Eliminate_false_alarm(total_fruit, false_alarm_threshold);
+    qDebug() << "After eliminate false alarm" << total_fruit.size();
+
+    QString track_result_path = "./tracking_frame/tracking_result_" + video_name + ".csv";
+    save_track_result(track_result_path, online_result, erase_ID);
 
 
     // Calculate Fruit Size Histogram
-    QFile histogram("./tracking_frame/fruit_histogram.csv");
-    QTextStream out1(&histogram);
-    if(histogram.open(QFile::WriteOnly|QIODevice::Append|QIODevice::Text)){
-        out1 << "Fruit size histogram\n";
-    }
-    int min = 100000, max = 0;
-    int min_ID = 0, max_ID = 0;
-    for(int i = 0 ; i < total_fruit.size() ; i++){
-        int n_frame = 0, size = 0;
-        for(int j = 0 ; j < total_fruit.at(i).width_height.size() ; j++){
-            int curr_size = total_fruit.at(i).width_height.at(j).x * total_fruit.at(i).width_height.at(j).y;
-            if(curr_size > size){
-                size = curr_size;
-                n_frame = j;
-            }
-        }
-        total_fruit.at(i).size = size;
-        out1 << size << ", ";
-        if(size < min){ min = size; min_ID = total_fruit.at(i).track_id;}
-        if(size > max){ max = size; max_ID = total_fruit.at(i).track_id;}
-    }
+    qDebug() << "Calculating Fruit Size Histogram";
+    std::pair<QList<int>, std::vector<std::pair<int, int>>> Histogram_max_min = Fruit_size_histogram(total_fruit);
+    QList<int> Histogram = Histogram_max_min.first;
+    std::vector<std::pair<int, int>> max_min = Histogram_max_min.second;
 
-    out1 << "\nMax size: " << max << "\n";
-    out1 << "Max ID: " << max_ID << "\n";
-    out1 << "Min size: " << min << "\n";
-    out1 << "Min ID: " << min_ID << "\n";
-    histogram.close();
+    QString save_path = "./tracking_frame/fruit_histogram_" + video_name + ".csv";
+    save_histogram(save_path, Histogram, max_min);
 
+    int max = max_min.at(0).second;
+    int min = max_min.at(1).second;
     int bin_size = (max - min) / 5;
     int size_bin[6] = {min, min + bin_size, min + 2*bin_size, min + 3*bin_size, min + 4*bin_size, max};
 
-    qDebug() << "Max size: " << max;
-    qDebug() << "Max ID: " << max_ID;
-    qDebug() << "Min size " << min;
-    qDebug() << "Min ID: " << min_ID;
-
     // Calculate Fruit Ripening
-    QFile Maturity("./tracking_frame/maturity.csv");
-    QTextStream out3(&Maturity);
-    if(Maturity.open(QFile::WriteOnly|QIODevice::Append|QIODevice::Text)){
-        out3 << "Fruit Ripening Stage\n";
-    }
-    for(int i = 0 ; i < total_fruit.size() ; i++){
-        int n_frame = 0, size = 0;
-        for(int j = 0 ; j < total_fruit.at(i).width_height.size() ; j++){
-            int curr_size = total_fruit.at(i).width_height.at(j).x * total_fruit.at(i).width_height.at(j).y;
-            if(curr_size > size){
-                size = curr_size;
-                n_frame = j;
-            }
-        }
-        out3 << "\nFruit ID: " << total_fruit.at(i).track_id;
-        cv::Mat input = total_fruit.at(i).frame_mat.at(n_frame).clone();
-        cv::Mat mask(input.rows, input.cols, CV_8U, cv::Scalar(0));
-        cv::Mat bgModel, fgModel;
-        int left_top_x = std::max(((int)total_fruit.at(i).trajectory.at(n_frame).x - (int)total_fruit.at(i).width_height.at(n_frame).x / 2 - 10), 0);
-        int left_top_y = std::max(((int)total_fruit.at(i).trajectory.at(n_frame).y - (int)total_fruit.at(i).width_height.at(n_frame).y / 2 - 10), 0);
-        int width = std::min((int)total_fruit.at(i).width_height.at(n_frame).x + 20, (int)input.cols);
-        int height = std::min((int)total_fruit.at(i).width_height.at(n_frame).y + 20, (int)input.rows);
-        cv::circle(mask, cv::Point(left_top_x + width / 2, left_top_y + height / 2), std::min(width / 2, height / 2) - 10, cv::Scalar(1), -1);
-        // left-top_x, left-top_y, width, height
-        cv::Rect rect(left_top_x, left_top_y, width, height);
-        cv::grabCut(input, mask, rect, bgModel, fgModel, 10, cv::GC_INIT_WITH_RECT);
-        cv::Mat mask_result(input.rows, input.cols, CV_8UC3);
-        int pixel_value[3] = {0};
-        double average_value[3] = {0};
-        int mask_pixel = 0, mature_pixel = 0;
-        if(!mask.empty()){
-            for(int i = 0 ; i < mask.rows ; i++){
-                for(int j = 0 ; j < mask.cols ; j++){
-                    if(mask.at<uchar>(i, j) == 1 || mask.at<uchar>(i, j) == 3){     // Foreground
-                        pixel_value[0] += input.at<cv::Vec3b>(i, j)[0];
-                        pixel_value[1] += input.at<cv::Vec3b>(i, j)[1];
-                        pixel_value[2] += input.at<cv::Vec3b>(i, j)[2];
-                        mask_pixel++;
-                        out3 << "\n" << input.at<cv::Vec3b>(i, j)[0] << ", " << input.at<cv::Vec3b>(i, j)[1] << ", " << input.at<cv::Vec3b>(i, j)[2];
-                        // Mature condition
-                        if((input.at<cv::Vec3b>(i, j)[2] >= 200 && input.at<cv::Vec3b>(i, j)[1] < 200 && input.at<cv::Vec3b>(i, j)[0] < 160)
-                                || (input.at<cv::Vec3b>(i, j)[2] >= 165 && input.at<cv::Vec3b>(i, j)[1] < 80 && input.at<cv::Vec3b>(i, j)[0] < 80)
-                                || (input.at<cv::Vec3b>(i, j)[2] >= 100 && input.at<cv::Vec3b>(i, j)[1] < 40 && input.at<cv::Vec3b>(i, j)[0] < 40)){
-                            mature_pixel++;
-                            mask.at<uchar>(i, j) = 255;
-                        }
-                        else{
-                            mask.at<uchar>(i, j) = 100;
-                        }
-                    }
-                    else    {mask.at<uchar>(i, j) = 0;}                             // Background
-                }
-            }
-            average_value[0] = (double)pixel_value[0] / (mask_pixel);
-            average_value[1] = (double)pixel_value[1] / (mask_pixel);
-            average_value[2] = (double)pixel_value[2] / (mask_pixel);
-            double ripening_stage = (double)mature_pixel / (double)mask_pixel;
-            out3 << "\n Average: " << average_value[0] << ", " << average_value[1] << ", " << average_value[2];
-            out3 << "\n Ripening Stage: " << ripening_stage << "\n" ;
-            if(mature_pixel == 0 || mask_pixel == 0)    ripening_stage = 0.0;
-            qDebug() << ripening_stage;
-            total_fruit.at(i).maturity = ripening_stage;
-            qDebug() << total_fruit.at(i).maturity;
-            for(int i = 0 ; i < mask.rows ; i++){
-                for(int j = 0 ; j < mask.cols ; j++){
-                    mask_result.at<cv::Vec3b>(i, j)[0] = input.at<cv::Vec3b>(i, j)[0] * 0.6 + mask.at<uchar>(i, j) * 0.4;
-                    mask_result.at<cv::Vec3b>(i, j)[1] = input.at<cv::Vec3b>(i, j)[1] * 0.6 + mask.at<uchar>(i, j) * 0.4;
-                    mask_result.at<cv::Vec3b>(i, j)[2] = input.at<cv::Vec3b>(i, j)[2] * 0.6 + mask.at<uchar>(i, j) * 0.4;
-                }
-            }
-            cv::putText(mask_result, "Fruit ID : " + std::to_string(total_fruit.at(i).track_id), cv::Point2f(0, mask_result.rows - 60), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(255, 255, 255), 1.5);
-            cv::putText(mask_result, "Ripening Stage : " + std::to_string(ripening_stage), cv::Point2f(0, mask_result.rows - 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(255, 255, 255), 1.5);
-
-            cv::imwrite("./tracking_frame/maturity_mask/fruit_" + std::to_string(total_fruit.at(i).track_id) + ".png", mask_result);
-        }
-        else{
-            qDebug() << "mask is empty";
-            total_fruit.at(i).maturity = 0.0;
-        }
-
-    }
+    qDebug() << "Calculating Fruit Ripening Stage";
+    QList<double> Stage_list = Fruit_ripening_stage(total_fruit);
 
     // Calculate global coordinate
-    QList<global_coor> global_coord;
-    float max_x = 0.0, max_y = 0.0;
-    float min_x = 10.0, min_y = 10.0;
-    for(int i = 0 ; i < total_fruit.size() ; i++){
-        for(int j = 0 ; j < total_fruit.at(i).history.size() ; j++){
-            if(total_fruit.at(i).history.at(j) == 2){   // First tracked point
-                qDebug() << "ID:" << total_fruit.at(i).track_id << " at frame: " << j;
-                cv::Point2f point = total_fruit.at(i).trajectory.at(0);
-                if(j == 0){
-                    global_coor coor;  // If tracked in the first frame -> No need to calculate
-                    coor.global_point = point;
-                    coor.global_fruit_ID = total_fruit.at(i).track_id;
-                    coor.maturity = total_fruit.at(i).maturity;
-                    coor.size = total_fruit.at(i).size;
-                    global_coord.append(coor);
-                }
-                else{
-                    for(int h = 0 ; h < j ; h++){
-                        qDebug() << "point: " << point.x << ", " << point.y << " in " << h << " th transform";
-                        cv::Point2f result = global_coordinate(Homo_history.at(h), point);
-                        point.x = result.x;
-                        point.y = result.y;
-                    }
-                    global_coor coor;
-                    coor.global_point = point;
-                    coor.global_fruit_ID = total_fruit.at(i).track_id;
-                    coor.maturity = total_fruit.at(i).maturity;
-                    coor.size = total_fruit.at(i).size;
-                    global_coord.append(coor);
-                }
-                if(point.x > max_x) max_x = point.x;
-                if(point.y > max_y) max_y = point.y;
-                if(point.x < min_x) min_x = point.x;
-                if(point.y < min_y) min_y = point.y;
-                //                qDebug() << "global coordinate: " << global_coor.at(i).x << ", " << global_coor.at(i).y;
-                break;
-            }
-        }
-    }
+    qDebug() << "Drawing Global map";
+    cv::Point2f max_global(0.0, 0.0), min_global(10.0, 10.0);
+    QList<global_coor> global_coord = Calculate_global_coordinate(total_fruit, max_global, min_global, Homo_history);
 
-    cv::Scalar Maturity_color[5] = {cv::Scalar(9, 113, 59)
-                                    , cv::Scalar(104, 192, 252)
-                                    , cv::Scalar(40, 74, 244)
-                                    , cv::Scalar(29, 29, 255)
-                                    , cv::Scalar(0, 0, 154)};
-    qDebug() << "max x, y" << max_x << ", " << max_y << "min x, y" << min_x << ", " << min_y;
-    if(min_x < 0)   max_x += abs(min_x);
-    if(min_y < 0)   max_y += abs(min_y);
-    cv::Mat Global_map((int)max_y + 1, (int)max_x + 1, CV_8UC3, cv::Scalar(255, 255, 255));
-    qDebug() << Global_map.rows << " " << Global_map.cols;
+    if(min_global.x < 0)   max_global.x += abs(min_global.x);
+    if(min_global.y < 0)   max_global.y += abs(min_global.y);
+    cv::Mat Global_map((int)max_global.y + 1, (int)max_global.x + 1, CV_8UC3, cv::Scalar(255, 255, 255));
+
     for(int i = 0 ; i < global_coord.size() ; i++){
         float global_x = global_coord.at(i).global_point.x;
         float global_y = global_coord.at(i).global_point.y;
-        qDebug() << global_x << " " << global_y;
-        if(min_x < 0)   global_x += abs(min_x);
-        if(min_y < 0)   global_y += abs(min_y);
-        qDebug() << global_x << " " << global_y;
-        Global_map.at<cv::Vec3b>((int)global_y, (int)global_x)[0] = 0;
-        Global_map.at<cv::Vec3b>((int)global_y, (int)global_x)[1] = 0;
-        Global_map.at<cv::Vec3b>((int)global_y, (int)global_x)[2] = 0;
+        if(min_global.x < 0)   global_x += abs(min_global.x);
+        if(min_global.y < 0)   global_y += abs(min_global.y);
 
-        // Set maturity Color
-        cv::Scalar color;
-        qDebug() << global_coord.at(i).maturity;
-        if(global_coord.at(i).maturity < 0.25)  color = Maturity_color[0];
-        else if(global_coord.at(i).maturity >= 0.25 && global_coord.at(i).maturity < 0.5)  color = Maturity_color[1];
-        else if(global_coord.at(i).maturity >= 0.5 && global_coord.at(i).maturity < 0.75)  color = Maturity_color[2];
-        else if(global_coord.at(i).maturity >= 0.75 && global_coord.at(i).maturity < 1.0)  color = Maturity_color[3];
-        else if(global_coord.at(i).maturity >= 1.0)  color = Maturity_color[4];
+        cv::Scalar color = set_maturity_color(global_coord.at(i).maturity);
+        int radius = set_radius(global_coord.at(i).size, size_bin);
 
-        // Set size radius
-        int radius;
-        if(global_coord.at(i).size >= size_bin[0] && global_coord.at(i).size < size_bin[1])   radius = 4;
-        else if(global_coord.at(i).size >= size_bin[1] && global_coord.at(i).size < size_bin[2])    radius = 8;
-        else if(global_coord.at(i).size >= size_bin[2] && global_coord.at(i).size < size_bin[3])    radius = 12;
-        else if(global_coord.at(i).size >= size_bin[3] && global_coord.at(i).size < size_bin[4])    radius = 16;
-        else if(global_coord.at(i).size >= size_bin[4] && global_coord.at(i).size < size_bin[5])    radius = 20;
-
-        cv::circle(Global_map, cv::Point(global_coord.at(i).global_point.x, global_coord.at(i).global_point.y), radius, color, -1);
-        cv::putText(Global_map, "ID: " + std::to_string(global_coord.at(i).global_fruit_ID), cv::Point(global_coord.at(i).global_point.x - 80, global_coord.at(i).global_point.y), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.7, cv::Scalar(0, 0, 255), 1);
+        cv::circle(Global_map, cv::Point(global_x, global_y), radius, color, -1);
+        cv::putText(Global_map, "ID: " + std::to_string(global_coord.at(i).global_fruit_ID), cv::Point(global_x - 80, global_y), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.7, cv::Scalar(0, 0, 255), 1);
     }
     cv::imshow("Global map", Global_map);
-    cv::imwrite("./tracking_frame/Global_map.jpg", Global_map);
+    cv::imwrite("./tracking_frame/Global_map_" + video_name.toStdString() + ".jpg", Global_map);
 
 }
+

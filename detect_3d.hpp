@@ -79,10 +79,13 @@ private slots:
 
     void on_fast_track_clicked();
 
+    void on_save_iou_stateChanged(int arg1);
+
 private:
     Ui::detect_3d *ui;
     bool save_dis;
     bool save_pose;
+    bool saveIOU;
     QString dis_path;
     QString pose_path;
     int scale;

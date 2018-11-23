@@ -146,15 +146,56 @@ void set_ID(std::vector<bbox_t_history>& total_fruit, QList<cv::Point> prev_trac
     }
 }
 
-void set_ID_fast(std::vector<bbox_t_history>& total_fruit, std::vector<bbox_t_history>& prev_vec, std::vector<bbox_t_history>& curr_vec, QList<cv::Mat> Homo_history, bool prev_fruit, int threshold, int lost_track_threshold, cv::Mat& check_mat, cv::Mat maturity_mat){
+double IOU(bbox_t_history prev_vec, bbox_t_history curr_vec, cv::Mat homo){
+
+    cv::Point2f prev_start((float)prev_vec.x, (float)prev_vec.y);
+    cv::Point2f curr_start((float)curr_vec.x, (float)curr_vec.y);
+    cv::Point2f prev_end((float)prev_vec.x + (float)prev_vec.w, (float)prev_vec.y + (float)prev_vec.h);
+    cv::Point2f curr_end((float)curr_vec.x + (float)curr_vec.w, (float)curr_vec.y + (float)curr_vec.h);
+
+    cv::Point2f start1 = get_tracked_point(homo, prev_start);
+    cv::Point2f end1 = get_tracked_point(homo, prev_end);
+    cv::Point2f start2 = curr_start;
+    cv::Point2f end2 = curr_end;
+
+    double width = std::min(end1.x, end2.x) - std::max(start1.x, start2.x);
+    double height = std::min(end1.y, end2.y) - std::max(start1.y, start2.y);
+
+    double intersection_area = width * height;
+    double IOU;
+    if(width < 0 || height < 0) IOU = 0.0;
+    else IOU = intersection_area / (((end1.x - start1.x) * (end1.y - start1.y)) + (curr_vec.w * curr_vec.h) - intersection_area);
+
+    //    qDebug() << "IOU: " << IOU;
+
+    return IOU;
+}
+
+double IOU(cv::Point2f prev_pt_LT, cv::Point2f curr_pt_LT, cv::Point2f prev_pt_RB, cv::Point2f curr_pt_RB){
+
+    double curr_w = curr_pt_RB.x - curr_pt_LT.x;
+    double curr_h = curr_pt_RB.y - curr_pt_LT.y;
+    double prev_w = prev_pt_RB.x - prev_pt_LT.x;
+    double prev_h = prev_pt_RB.y - prev_pt_LT.y;
+
+    double width = std::min(prev_pt_RB.x, curr_pt_RB.x) - std::max(prev_pt_LT.x, curr_pt_LT.x);
+    double height = std::min(prev_pt_RB.y, curr_pt_RB.y) - std::max(prev_pt_LT.y, curr_pt_LT.y);
+
+    double intersection_area = width * height;
+    double IOU;
+    if(width < 0 || height < 0) IOU = 0.0;
+    else IOU = intersection_area / (curr_w * curr_h + prev_w * prev_h - intersection_area);
+    qDebug() << "2 IOU: " << IOU;
+    return IOU;
+}
+
+
+void set_ID_fast(std::vector<bbox_t_history>& total_fruit
+                 , std::vector<bbox_t_history>& prev_vec, std::vector<bbox_t_history>& curr_vec, QList<cv::Mat> Homo_history
+                 , bool prev_fruit, int threshold, int lost_track_threshold, cv::Mat& check_mat, cv::Mat maturity_mat, bool save_IOU)
+{
     cv::Mat save_frame = maturity_mat.clone();
     int curr_frame = Homo_history.size();
-
-    QList<cv::Point2f> prev_tracked_fruit;
-    for(int i = 0 ; i < prev_vec.size() ; i++){
-        cv::Point2f temp((float)prev_vec.at(i).x + (float)prev_vec.at(i).w / 2, (float)prev_vec.at(i).y + (float)prev_vec.at(i).h / 2);
-        prev_tracked_fruit.append(get_tracked_point(Homo_history.at(curr_frame - 1), temp));
-    }
 
     QList<int> used_ids;
     int used_id = -1;
@@ -165,11 +206,10 @@ void set_ID_fast(std::vector<bbox_t_history>& total_fruit, std::vector<bbox_t_hi
 
         if(prev_fruit){
             double distance = 1000;    // Distance between predict point and true point
-            for(int j = 0 ; j < prev_tracked_fruit.size() ; j++){
+            for(int j = 0 ; j < prev_vec.size() ; j++){
                 bool duplicate = false;
                 for(int n = 0 ; n < used_ids.size() ; n++){
                     if(prev_vec.at(j).track_id == used_ids.at(n)){
-//                        qDebug() << "ID" << prev_vec.at(j).track_id << "used";
                         duplicate = true;
                         break;
                     }
@@ -177,18 +217,39 @@ void set_ID_fast(std::vector<bbox_t_history>& total_fruit, std::vector<bbox_t_hi
                 if(duplicate){
                     continue;
                 }
-                double temp = cv::norm(prev_tracked_fruit.at(j) - curr_fruit);
-                if(temp < distance) {
+
+                cv::Point2f p((float)prev_vec.at(j).x + (float)prev_vec.at(j).w / 2, (float)prev_vec.at(j).y + (float)prev_vec.at(j).h / 2);
+                cv::Point2f prev_tracked_fruit = get_tracked_point(Homo_history.at(curr_frame - 1), p);
+                double temp = cv::norm(prev_tracked_fruit - curr_fruit);
+                double iou = IOU(prev_vec.at(j), curr_vec.at(i), Homo_history.at((curr_frame - 1)));
+
+                QFile history;
+                QTextStream out(&history);
+                if(save_IOU){
+                    history.setFileName("F://realsense_D435//info_bt_fruit.csv");
+                    if(history.open(QFile::WriteOnly|QIODevice::Append|QIODevice::Text)){
+                        out << "Frame: " << curr_frame << ", L2-norm: " << temp << ", IOU: " << iou << ", ";
+                    }
+                }
+                if((temp < distance) && (iou >= 0.9)) {
                     distance = temp;
                     if(temp < threshold){
                         curr_vec.at(i).track_id = prev_vec.at(j).track_id;
                         used_id = prev_vec.at(j).track_id;
+                        if(save_IOU)    out << "1, ID: " << used_id << "\n";
                         qDebug() << "first stage - tracked  ID:" << prev_vec.at(j).track_id;
                     }
-                    else {curr_vec.at(i).track_id = 0;  qDebug() << "first stage - Lost2Track or New";}
+                    else {
+                        curr_vec.at(i).track_id = 0;
+                        if(save_IOU)    out << "0\n";
+                        qDebug() << "first stage - Lost2Track or New";}
                 }
+                else{
+                    if(save_IOU)    out << "0\n";
+                }
+                if(save_IOU)    history.close();
             }
-//            qDebug() << used_id;
+            //            qDebug() << used_id;
             if(used_id != -1)    used_ids.append(used_id);
             if(curr_vec.at(i).track_id != 0){   // Old Fruit compare to last frame
                 auto it = std::find_if(total_fruit.begin(), total_fruit.end(), [&](bbox_t_history &vector)
@@ -225,17 +286,21 @@ void set_ID_fast(std::vector<bbox_t_history>& total_fruit, std::vector<bbox_t_hi
             }
         }
     }
-
     for(int i = 0 ; i < curr_vec.size() ; i++){
         if(curr_vec.at(i).track_id == 0){   // 1. Lost -> Tracked  2. New fruit
             QList<double> dis;
+            QList<double> IOU_r;
             QList<int> lost_index;
             cv::Point2f curr_point((float)curr_vec.at(i).x + (float)curr_vec.at(i).w / 2, (float)curr_vec.at(i).y + (float)curr_vec.at(i).h / 2);
             cv::Point2d w_h(curr_vec.at(i).w, curr_vec.at(i).h);
             qDebug() << "check : 1. Lost -> Tracked  2. New fruit";
             for(int j = 0 ; j < total_fruit.size() ; j++){
                 if(total_fruit.at(j).history.at(total_fruit.at(j).history.size() - 1) == 1){    // Lost
+                    double iou;
                     cv::Point2f lost_point = total_fruit.at(j).trajectory.at(total_fruit.at(j).trajectory.size() - 1);
+                    cv::Point2f lost_wh = total_fruit.at(j).width_height.at(total_fruit.at(j).width_height.size() - 1);
+                    cv::Point2f lost_left_top(lost_point.x - lost_wh.x / 2, lost_point.y - lost_wh.y / 2);
+                    cv::Point2f lost_right_bottom(lost_point.x + lost_wh.x / 2, lost_point.y + lost_wh.y / 2);
                     cv::putText(check_mat, "ID : " + std::to_string(total_fruit.at(j).track_id), cv::Point2f(lost_point.x - 30, lost_point.y + 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar((j*10)%255, (j*50)%255, (j*100)%255), 1.5);
                     qDebug() << "Search for Lost fruit, Lost ID: " << total_fruit.at(j).track_id
                              << ", lost frame: " << total_fruit.at(j).lost_frame
@@ -244,6 +309,8 @@ void set_ID_fast(std::vector<bbox_t_history>& total_fruit, std::vector<bbox_t_hi
                     bool track_is_out = false;
                     for(int h = total_fruit.at(j).lost_frame - 1 ; h <= curr_frame - 1 ; h++){
                         cv::Point2f output = get_tracked_point(Homo_history.at(h), lost_point);
+                        cv::Point2f output_lost_left_top = get_tracked_point(Homo_history.at(h), lost_left_top);
+                        cv::Point2f output_lost_right_bottom = get_tracked_point(Homo_history.at(h), lost_right_bottom);
                         // If lost-tracked point is out of the img --> From Lost to Inactive && won't compare with others
                         if(output.x < 0 || output.x > check_mat.cols || output.y < 0 || output.y > check_mat.rows){
                             track_is_out = true;
@@ -251,28 +318,37 @@ void set_ID_fast(std::vector<bbox_t_history>& total_fruit, std::vector<bbox_t_hi
                             total_fruit.at(j).history.append(0);
                             break;
                         }
-                        lost_point.x = output.x;
-                        lost_point.y = output.y;
+                        lost_point = output;
+                        lost_left_top = output_lost_left_top;
+                        lost_right_bottom = output_lost_right_bottom;
                         cv::circle(check_mat, lost_point, 3, cv::Scalar((j*10)%255, (j*50)%255, (j*100)%255), -1);
+                        cv::rectangle(check_mat, lost_left_top, lost_right_bottom, cv::Scalar((j*10)%255, (j*50)%255, (j*100)%255), 1);
                     }
                     if(track_is_out == false){      // If tracked point is inside the img --> put into compare
                         cv::circle(check_mat, lost_point, lost_track_threshold, cv::Scalar((j*10)%255, (j*50)%255, (j*100)%255), 1);
                         double temp = cv::norm(lost_point - curr_point);
+                        cv::Point2f curr_left_top(curr_vec.at(i).x, curr_vec.at(i).y);
+                        cv::Point2f curr_right_bottom(curr_vec.at(i).x + curr_vec.at(i).w, curr_vec.at(i).y + curr_vec.at(i).h);
+                        iou = IOU(lost_left_top, curr_left_top, lost_right_bottom, curr_right_bottom);
                         dis.append(temp);
+                        qDebug() << "dis: " << temp;
+                        IOU_r.append(iou);
                         lost_index.append(j);  // j means lost fruit in total_fruit with "INDEX" not "ID"
+
                     }
+                    cv::putText(check_mat, "IOU : " + std::to_string(iou), cv::Point2f(lost_point.x - 30, lost_point.y + 60), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar((j*10)%255, (j*50)%255, (j*100)%255), 1.5);
                 }
             }
             if(dis.size() != 0){    // There are Lost fruit in total fruit
                 double min = dis.at(0);
                 int index = lost_index.at(0);
                 for(int k = 1 ; k < dis.size() ; k++){
-                    if(dis.at(k) < min){
+                    if(dis.at(k) < min && IOU_r.at(k) >= 0.4){
                         min = dis.at(k);
                         index = lost_index.at(k);
                     }
                 }
-                qDebug() << min;
+                qDebug() << "min dis" << min;
                 if(min < lost_track_threshold){   // 1. Lost -> Tracked
                     curr_vec.at(i).track_id = total_fruit.at(index).track_id;
                     total_fruit.at(index).history.pop_back();

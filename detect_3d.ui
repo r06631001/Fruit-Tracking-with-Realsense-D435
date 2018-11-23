@@ -215,6 +215,19 @@
      <string>Faster Tracking</string>
     </property>
    </widget>
+   <widget class="QCheckBox" name="save_iou">
+    <property name="geometry">
+     <rect>
+      <x>700</x>
+      <y>68</y>
+      <width>141</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Save IOU Info.</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
